@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "{{ .Values.clusterName }}-operator-config"
+  namespace: {{ .Release.Namespace }}
+data:
+  CLUSTER_NAME: {{ .Values.clusterName }}
+  {{- if .Values.pulsarServiceName }}
+  PULSAR_SERVICE_NAME: {{ .Values.pulsarServiceName }}
+  {{- end }}
+  {{- if .Values.pulsarServiceNamespace }}
+  PULSAR_SERVICE_NAMESPACE: {{ .Values.pulsarServiceNamespace }}
+  {{- end }}
+  {{- if .Values.pulsarSSLHostname }}
+  PULSAR_API_SSL_SNI: {{ .Values.pulsarSSLHostname }}
+  {{- end }}

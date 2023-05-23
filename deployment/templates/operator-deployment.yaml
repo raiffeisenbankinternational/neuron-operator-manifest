@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "{{ .Values.clusterName }}-neuron-operator"
+spec:
+  selector:
+    matchLabels:
+      app: neuron-operator
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: neuron-operator
+    spec:
+      serviceAccountName: "{{ .Values.clusterName }}-neuron-operator"
+      containers:
+        - name: neuron-operator
+          image: artifacts.rbi.tech/docker/raiffeisen/neuron-operator-application/neuron-operator-application:2023.09.21
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          args:
+            - '--liveness=http://0.0.0.0:8080/healthz'
+            - '--all-namespaces'
+          livenessProbe:
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            httpGet:
+              path: /healthz
+              port: 8080
+          envFrom:
+            - configMapRef:
+                name: "{{ .Values.clusterName }}-operator-config"
+          volumeMounts:
+            - name: pulsar-admin-token
+              mountPath: "/var/run/secrets/pulsar"
+
+      volumes:
+        - name: pulsar-admin-token
+          secret:
+            secretName: {{ template "pulsar.admin.secret" . }}
+            optional: true

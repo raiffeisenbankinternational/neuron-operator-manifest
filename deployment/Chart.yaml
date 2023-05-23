@@ -1,0 +1,9 @@
+apiVersion: v1
+appVersion: 0.1.0
+description: Helm chart for Neuron operator
+name: neuron-operator
+version: 0.1.0
+home: https://code.rbi.tech/raiffeisen/neuron-operator-manifest
+maintainers:
+- name: Neuron Innersouce Foundation
+  email: neuron@rbinternational.com

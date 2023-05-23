@@ -1,0 +1,39 @@
+# This workflow requires GitHub Enterprise 3.8, currently not available.
+
+name: Dependabot Summary
+
+on:
+  workflow_call:
+
+jobs:
+  dependabot-summary:
+    name: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Get Dependabot alerts
+      run: |
+        curl -L \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer $GITHUB_TOKEN" \
+        -H "X-GitHub-Api-Version: 2022-11-28"  \
+        https://code.rbi.tech/repos/$GITHUB_REPOSITORY/dependabot/alerts \
+        > scan_dependabot_summary.json
+
+    - name: Create summary
+      run: |
+        jq -j '.[] | .security_advisory.cve_id, ", ", .security_advisory.ghsa_id, ", ", .state,", ", .number, ", ", .security_advisory.summary, "\n"' scan_dependabot_summary.json > scan_dependabot_summary.csv
+
+    - name: Upload artifacts
+      id: upload
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: scan_dependabot_summary.csv
+        path: scan_dependabot_summary.csv
+        retention-days: 5

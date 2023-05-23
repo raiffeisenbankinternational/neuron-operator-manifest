@@ -1,0 +1,154 @@
+name: reusable wf | build-push container image
+
+on:
+  workflow_call:
+    inputs:
+      imageName:
+        required: true
+        type: string
+      imageVersion:
+        required: true
+        default: 2023.01.01
+        type: string
+      targetArchitectures:
+        required: false
+        default: ""
+        type: string
+      buildContext:
+        required: false
+        default: "."
+        type: string
+      containerFiles:
+        required: false
+        default: "./Dockerfile"
+        type: string
+      buildArgs:
+        required: false
+        type: string
+      pushImageToArtifactory:
+        required: true
+        default: true
+        type: boolean
+      imageRegistry:
+        required: true
+        default: artifacts.rbi.tech
+        type: string
+      imageRegistrySubpath:
+        required: false
+        default: artifactory
+        type: string
+      imageNamespace:
+        required: true
+        default: cortex-docker-host
+        type: string
+      push:
+        required: false
+        default: true
+        type: boolean
+      searchPattern:
+        required: true
+        type: string
+    secrets:
+      CONTAINER_REGISTRY_USER:
+        required: true
+      CONTAINER_REGISTRY_TOKEN:
+        required: true
+      COSIGN_KEY:
+        required: true
+      COSIGN_PUBLIC_KEY:
+        required: true
+
+jobs:
+  build-containerfile:
+    name: Build image with Containerfile
+    runs-on: mihai-awesome
+    #runs-on: mihai-awesome
+    # strategy:
+    #   fail-fast: false
+    # permissions:
+    #   packages: write
+    #   id-token: write
+    # outputs:
+    #   image-with-tag: ${{ steps.build-image.image }}
+    #   digest: ${{ steps.upload.digest }}
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y qemu-user-static
+          docker run --rm --privileged multiarch/qemu-user-static --reset --persistent yes --credential yes
+
+          wget https://artifacts.rbi.tech/artifactory/github-com-raw-proxy/sigstore/cosign/releases/download/v2.0.0/cosign-linux-amd64
+          chmod +x cosign-linux-amd64
+          mv cosign-linux-amd64 /tmp/cosign
+
+      - name: Checkout Buildah action
+        uses: actions/checkout@v3
+
+      - name: Build image
+        id: build-image
+        uses: internal-marketplace/buildah-build@v2.10
+        with:
+          image: ${{ inputs.imageNamespace }}.${{ inputs.imageRegistry }}/${{ inputs.imageName }}
+          tags: ${{ inputs.imageVersion }}
+          #oci: true
+          tls-verify: true
+          #archs: ${{ inputs.targetArchitectures }}
+          platforms: linux/amd64 #, linux/arm64
+          #context: ${{ inputs.buildContext }}
+          containerfiles: ${{ inputs.containerFiles }}
+          build-args:  ${{ inputs.buildArgs }}
+          extra-args: |
+             --security-opt seccomp=unconfined --isolation chroot --security-opt apparmor=unconfined --security-opt label=disable
+
+      - name: Push image to registry
+        id: push-to-container-registry
+        if: ${{ inputs.push }}
+        uses: internal-marketplace/push-to-registry@v2
+        with:
+          tags:  ${{ inputs.imageNamespace }}.${{ inputs.imageRegistry }}/${{ inputs.imageName }}:${{ inputs.imageVersion }}
+          username: ${{ secrets.CONTAINER_REGISTRY_USER }}
+          password: ${{ secrets.CONTAINER_REGISTRY_TOKEN }}
+
+      - name: Echo Outputs
+        run: |
+          echo "Image: ${{ steps.build-image.outputs.image }}"
+          echo "Tags: ${{ steps.build-image.outputs.tags }}"
+          echo "Tagged Image: ${{ steps.build-image.outputs.image-with-tag }}"
+
+      - name: Generate build output
+        run: |
+          ARTIFACTS=$(echo "${{ steps.build-image.outputs.image-with-tag }}")
+          if [ -z "${ARTIFACTS}" ]
+            then
+              echo "artifacts: []" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "artifacts:" >> $GITHUB_STEP_SUMMARY
+              echo '- searchPattern: "image: ${{ inputs.searchPattern }}"' >> $GITHUB_STEP_SUMMARY
+              echo '  replaceString: "image: ${{ steps.build-image.outputs.image-with-tag }}"' >> $GITHUB_STEP_SUMMARY
+          fi
+          cp $GITHUB_STEP_SUMMARY build-output.yaml
+
+      - name: Upload build output
+        id: upload
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-output
+          path: build-output.yaml
+          retention-days: 5
+
+      - name: Sign the images
+        run: |
+          /tmp/cosign login --username ${{ secrets.CONTAINER_REGISTRY_USER }} --password ${{ secrets.CONTAINER_REGISTRY_TOKEN }} ${{ inputs.imageRegistry }}
+          echo '${{ secrets.COSIGN_KEY }}' > /tmp/cosign.key
+          /tmp/cosign sign --yes --key=/tmp/cosign.key ${{ steps.build-image.outputs.image-with-tag }}
+          rm /tmp/cosign.key
+        env:
+          COSIGN_PASSWORD: ''
+
+     #- name: Verify the pushed tags
+     #  run: |
+     #    echo '${{ secrets.COSIGN_PUBLIC_KEY }}' > /tmp/cosign.pub
+     #    /tmp/cosign verify --key=/tmp/cosign.pub ${{ steps.build-image.outputs.image-with-tag }}
+     #    rm /tmp/cosign.pub

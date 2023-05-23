@@ -1,0 +1,59 @@
+name: Go Build
+
+on:
+  workflow_call:
+    inputs:
+      buildPath:
+        type: string
+        required: false
+        default: '.'
+      goVersion:
+        type: string
+        required: false
+        default: '>=1.17.0'
+
+jobs:
+  golang:
+
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: internal-marketplace/rbi-setup-go@v3
+        with:
+          go-version: ${{ inputs.goVersion }}
+
+      - name: Download modules to local cache
+        run: |
+          go mod download || echo "Skipping."
+
+
+      - name: Build
+        run: |
+          cd ${{ inputs.buildPath }}
+          go build -v ./...
+
+      - name: Test
+        run: |
+          cd ${{ inputs.buildPath }}
+          go test -v ./... | tee /tmp/gotest.log
+
+      - name: Extract test results
+        if: always()
+        run: |
+          grep -E 'PASS|FAIL|SKIP' /tmp/gotest.log > /tmp/test.results
+          sed -e 's/\(.*\)\( PASS.*\)/✅ \2/g' -e  's/\(.*\)\( FAIL.*\)/❌ \2/g'  -e 's/\(.*\)\( SKIP.*\)/⏩ \2/g' /tmp/test.results | tee /tmp/report.md
+
+      - name: Store build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-artifacts
+          path: ./dist/*.zip
+
+      - name: Store static files
+        uses: actions/upload-artifact@v3
+        with:
+          name: report.md
+          path: /tmp/report.md
+          retention-days: 5

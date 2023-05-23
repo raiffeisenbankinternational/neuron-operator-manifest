@@ -1,0 +1,92 @@
+name: test-python
+
+inputs:
+  path:
+    type: string
+    default: "./"
+    required: false
+  python_source_path:
+    type: string
+    default: "./"
+    required: false
+  push:
+    required: false
+    default: false
+    type: boolean
+  CONTAINER_REGISTRY_USER:
+    type: string
+    required: true
+  CONTAINER_REGISTRY_TOKEN:
+    type: string
+    required: true
+  COSIGN_KEY:
+    type: string
+    required: true
+  COSIGN_PUBLIC_KEY:
+    type: string
+    required: true
+  GH_TOKEN:
+    type: string
+    required: true
+    description: 'An explicit token to query other repos. This is necessary since if we user GITHUB_TOKEN, that would only have access to the current repo.'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Checkout innersource repo for use of composites
+      uses: actions/checkout@v3
+      with:
+        repository: raiffeisen/innersource-github-templates
+        token: ${{ inputs.GH_TOKEN }}
+        path: raiffeisen/innersource-github-templates
+
+    - name: Determine next version
+      id: version
+      uses: ./raiffeisen/innersource-github-templates/.github/composites/version
+      with:
+        version-type: ${{ inputs.version-type }}
+        GH_TOKEN: ${{ inputs.GH_TOKEN }}
+
+    - name: Test
+      shell: bash
+      run: |
+        cd ${{ inputs.python_source_path }}
+        python3 -m unittest discover . 2>&1 | tee /tmp/test-python.log
+
+    - name: Store static files
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-python.log
+        path: /tmp/test-python.log
+        retention-days: 5
+
+    - name: Append to step summary
+      if: always()
+      shell: bash
+      run: |
+        echo '# Python Test Reports' >> $GITHUB_STEP_SUMMARY
+        cat /tmp/test-python.log >> $GITHUB_STEP_SUMMARY
+
+    - name: Gzip output to upload and sign
+      if: always()
+      shell: bash
+      run: |
+        tar -zcvf /tmp/test-python.tar.gz $GITHUB_REPOSITORY /tmp/test-python.log
+
+    - name: Upload artifacts and signatures to Artifactory
+      if: always()
+      uses: ./raiffeisen/innersource-github-templates/.github/composites/sign
+      with:
+        artifact: /tmp/test-python.tar.gz
+        imageRegistry: artifacts.rbi.tech
+        namespace: cortex-docker-host
+        path: $GITHUB_REPOSITORY
+        push: ${{ inputs.push }}
+        version: ${{ steps.version.outputs.tag }}
+        CONTAINER_REGISTRY_USER: ${{ inputs.CONTAINER_REGISTRY_USER }}
+        CONTAINER_REGISTRY_TOKEN: ${{ inputs.CONTAINER_REGISTRY_TOKEN }}
+        COSIGN_KEY: ${{ inputs.COSIGN_KEY }}
+        COSIGN_PUBLIC_KEY: ${{ inputs.COSIGN_PUBLIC_KEY }}

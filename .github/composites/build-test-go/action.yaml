@@ -1,0 +1,123 @@
+name: build-test-go
+
+inputs:
+  buildPath:
+    type: string
+    required: false
+    default: '.'
+  goVersion:
+    type: string
+    required: false
+    default: '>=1.17.0'
+  CONTAINER_REGISTRY_USER:
+    required: true
+  CONTAINER_REGISTRY_TOKEN:
+    required: true
+  COSIGN_KEY:
+    required: true
+  COSIGN_PUBLIC_KEY:
+    required: true
+  GH_TOKEN:
+    required: true
+    description: 'An explicit token to query other repos. This is necessary since if we user GITHUB_TOKEN, that would only have access to the current repo.'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Checkout innersource repo for use of composites
+      uses: actions/checkout@v3
+      with:
+        repository: raiffeisen/innersource-github-templates
+        token: ${{ inputs.GH_TOKEN }}
+        path: raiffeisen/innersource-github-templates
+
+    - name: Determine next version
+      id: version
+      uses: ./raiffeisen/innersource-github-templates/.github/composites/version
+      with:
+        version-type: ${{ inputs.version-type }}
+        GH_TOKEN: ${{ inputs.GH_TOKEN }}
+
+    - name: Set up Go
+      uses: internal-marketplace/rbi-setup-go@v3
+      with:
+        go-version: ${{ inputs.goVersion }}
+
+    - name: Download modules to local cache
+      shell: bash
+      run: |
+        go mod download || echo "Skipping."
+
+    - name: Build
+      shell: bash
+      run: |
+        cd ${{ inputs.buildPath }}
+        go build -v ./...
+
+    - name: Get module name
+      shell: bash
+      id: get-module-name
+      run: |
+        cd ${{ inputs.buildPath }}
+        set -x
+        echo "NAME=$(realpath $(head -1 go.mod | cut -d ' ' -f2))" >> $GITHUB_OUTPUT
+
+    - name: Store build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-artifacts
+        path: ${{ steps.get-module-name.outputs.NAME }}
+
+    - name: Test
+      shell: bash
+      run: |
+        set -o pipefail
+        cd ${{ inputs.buildPath }}
+        go test -v ./... | tee /tmp/gotest.log
+
+    - name: Extract test results
+      if: always()
+      shell: bash
+      run: |
+        grep -E 'PASS|FAIL|SKIP' /tmp/gotest.log > /tmp/test.results
+        echo '# Go Test results' > /tmp/build-test-go.log
+        sed -e 's/\(.*\)\( PASS.*\)/✅ \2/g' -e  's/\(.*\)\( FAIL.*\)/❌ \2/g'  -e 's/\(.*\)\( SKIP.*\)/⏩ \2/g' /tmp/test.results | tee -a /tmp/build-test-go.log
+
+    - name: Store static files
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-test-go.log
+        path: /tmp/build-test-go.log
+        retention-days: 5
+
+    - name: Append to step summary
+      if: always()
+      shell: bash
+      run: |
+        echo '# Go Test Reports' >> $GITHUB_STEP_SUMMARY
+        cat /tmp/build-test-go.log >> $GITHUB_STEP_SUMMARY
+
+    - name: Gzip output to upload and sign
+      if: always()
+      shell: bash
+      run: |
+        tar -zcvf /tmp/build-test-go.tar.gz /tmp/build-test-go.log ${{ steps.get-module-name.outputs.NAME }}
+
+    - name: Upload artifacts and signatures to Artifactory
+      if: always()
+      uses: ./raiffeisen/innersource-github-templates/.github/composites/sign
+      with:
+        artifact: /tmp/build-test-go.tar.gz
+        imageRegistry: artifacts.rbi.tech
+        namespace: cortex-docker-host
+        path: $GITHUB_REPOSITORY
+        push: ${{ inputs.push }}
+        version: ${{ steps.version.outputs.tag }}
+        CONTAINER_REGISTRY_USER: ${{ inputs.CONTAINER_REGISTRY_USER }}
+        CONTAINER_REGISTRY_TOKEN: ${{ inputs.CONTAINER_REGISTRY_TOKEN }}
+        COSIGN_KEY: ${{ inputs.COSIGN_KEY }}
+        COSIGN_PUBLIC_KEY: ${{ inputs.COSIGN_PUBLIC_KEY }}

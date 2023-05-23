@@ -1,0 +1,19 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: neuron-operator
+  description: Neuron Operator
+  annotations:
+    backstage.io/source-location: url:https://code.rbi.tech/raiffeisen/neuron-operator-manifest
+    backstage.io/techdocs-ref: url:https://code.rbi.tech/raiffeisen/neuron-operator-manifest
+  tags:
+  - neuron
+  - neuron-core-service
+  - kubernetes-operator
+spec:
+  type: service
+  lifecycle: production
+  owner: neuron-trusted-commiters
+  system: neuron
+  dependsOn:
+  - 'component:neuron-pulsar'

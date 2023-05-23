@@ -1,0 +1,28 @@
+name: "Bump Version by Date"
+
+on:
+  workflow_call:
+    outputs:
+      tag:
+        value: ${{ jobs.version-bump-date.outputs.tag }}
+
+jobs:
+  version-bump-date:
+    name: Bump-by-Date
+    runs-on: mihai-awesome
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    outputs:
+      tag: ${{ steps.github-calculate-tag.outputs.tag }}
+    steps:
+    - name: github-calculate-tag # Find latest tag in the form YYYY.WW.{{counter}} and calculates a new one with counter incremented
+      run: |
+        set -euo pipefail
+        AUTH_HEADER="Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}"
+        BASE_URL="https://code.rbi.tech/api/v3"
+        LATEST=$(curl -kLs -H "$AUTH_HEADER" "$BASE_URL/repos/$GITHUB_REPOSITORY/tags?per_page=100" | jq -r '[.[].name | select(test("^\\d{4}.\\d{2}.\\d+$"))] | first')
+        COUNTER=`echo -n "${LATEST:-0}" | cut -d'.' -f 3`
+        echo -n `date +%Y.%V.`"$((COUNTER+1))" | tee /tmp/tag
+        echo "tag=$(cat /tmp/tag)" >> $GITHUB_OUTPUT

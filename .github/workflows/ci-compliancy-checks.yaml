@@ -1,0 +1,34 @@
+# This workflow requires GitHub Enterprise 3.8, currently not available.
+
+name: Compliancy Checks
+
+on:
+  workflow_call:
+
+jobs:
+  compliancy-checks:
+    name: check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Run compliancy checks
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -o pipefail
+        docker run --rm -it --net=host -e GITHUB_TOKEN=$GITHUB_TOKEN -v $(pwd):/src cortex-docker-host.artifacts.rbi.tech/compliancy-checks:0.0.5 /src $GITHUB_TOKEN $GITHUB_REPOSITORY | tee /tmp/compliancy-checks.log
+
+    - name: Upload artifacts
+      id: upload
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: compliancy-checks.log
+        path: /tmp/compliancy-checks.log
+        retention-days: 5
+

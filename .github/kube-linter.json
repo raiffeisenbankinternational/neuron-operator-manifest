@@ -1,0 +1,14 @@
+{
+    "problemMatcher": [
+        {
+            "owner": "kube-linter",
+            "pattern": [
+                {
+                    "regexp": "^([\\w\\/]+\\.ya?ml)\\:\\s+\\([^\\)]+\\)\\s+([^\\(]+)\\s+\\(.*(?:remediation)\\:\\s+(.*)\\)$",
+                    "file": 1,
+                    "message": 3,
+                }
+            ]
+        }
+    ]
+}

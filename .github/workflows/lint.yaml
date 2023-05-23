@@ -1,0 +1,38 @@
+name: Kubernetes linting
+
+on:
+  pull_request:
+    branches:
+      - main
+
+env:
+  KUBE_LINTER_VERSION: 0.4.0
+
+jobs:
+  kube-linter:
+    runs-on: self-hosted
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+
+    - name: Cache kube-linter
+      id: cache-kube-linter
+      uses: actions/cache@v3
+      with:
+        path: .bin/kube-linter
+        key: kube-linter-${{ runner.os }}-${{ env.KUBE_LINTER_VERSION }}
+
+    - name: Download kube-linter
+      if: steps.cache-kube-linter.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        wget https://github.com/stackrox/kube-linter/releases/download/$KUBE_LINTER_VERSION/kube-linter-${{ runner.os }}.tar.gz -O /tmp/kube-linter.tar.gz
+        mkdir .bin
+        tar xvf /tmp/kube-linter.tar.gz -C .bin
+
+    - name: Run kube-linter
+      shell: bash
+      run: |
+        echo '::add-matcher::.github/kube-linter.json'
+        ./.bin/kube-linter lint deployment --exclude run-as-non-root,no-read-only-root-fs
+        echo '::remove-matcher owner=kube-linter::'

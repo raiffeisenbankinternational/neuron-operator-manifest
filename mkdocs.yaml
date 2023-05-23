@@ -1,0 +1,8 @@
+site_name: Neuron Operator
+site_description: Neuron Operator Documentation
+
+nav:
+  - What is Neuron Operator?: 'index.md'
+
+plugins:
+  - techdocs-core

@@ -1,0 +1,125 @@
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  name: "{{ .Values.clusterName }}-neuron-operator"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: "{{ .Values.clusterName }}-neuron-operator-role"
+  namespace: "{{ .Release.Namespace }}"
+rules:
+  - apiGroups:
+      - ''
+    resources:
+      - services
+    verbs:
+      - list
+      - watch
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: "{{ .Values.clusterName }}-neuron-operator-rolebinding"
+  namespace: "{{ .Release.Namespace }}"
+subjects:
+  - kind: ServiceAccount
+    name: "{{ .Values.clusterName }}-neuron-operator"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: "{{ .Values.clusterName }}-neuron-operator-role"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: "{{ .Values.clusterName }}-neuron-operator-cluster-role"
+rules:
+  # Permissions required by kopf
+  # with --all-namespaces
+  - apiGroups:
+      - kopf.dev
+    resources:
+      - clusterkopfpeerings
+    verbs:
+      - list
+      - watch
+      - patch
+      - get
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - list
+      - watch
+  - apiGroups:
+      - ''
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - admissionregistration.k8s.io/v1
+      - admissionregistration.k8s.io/v1beta1
+    resources:
+      - validatingwebhookconfigurations
+      - mutatingwebhookconfigurations
+    verbs:
+      - create
+      - patch
+  # Permissions required for operator functionality
+  - apiGroups:
+      - neuron.isf
+    resources:
+      - neuronconnections
+      - neurontenants
+      - neuronnamespaces
+      - neurontopics
+      - neuronschemas
+      - neuronconnections/status
+      - neurontenants/status
+      - neuronnamespaces/status
+      - neurontopics/status
+      - neuronschemas/status
+      - neuronconnections/finalizers
+      - neurontenants/finalizers
+      - neuronnamespaces/finalizers
+      - neurontopics/finalizers
+      - neuronschemas/finalizers
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - ''
+    resources:
+      - events
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: "{{ .Values.clusterName }}-neuron-operator-rolebinding"
+subjects:
+  - kind: ServiceAccount
+    name: "{{ .Values.clusterName }}-neuron-operator"
+    namespace: "{{ .Release.Namespace }}"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: "{{ .Values.clusterName }}-neuron-operator-cluster-role"

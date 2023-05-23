@@ -1,0 +1,107 @@
+name: "Bump Version by Semantic Version"
+
+on:
+  workflow_call:
+    inputs:
+      version-type:
+        required: false
+        type: string
+        default: 'PATCH' # MAJOR, MINOR, PATCH, DATE, STRING
+      version-old:
+        required: false # not required for i.e. DATE
+        type: string
+    outputs:
+      tag:
+        value: ${{ jobs.version-bump.outputs.tag }}
+
+jobs:
+  version-bump-semantic:
+    if: inputs.version-type == 'MAJOR' || inputs.version-type == 'MINOR' || inputs.version-type == 'PATCH'
+    name: Bump-by-Semantics
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    outputs:
+      tag: ${{ steps.version-bump-semantic-run.outputs.bumped-semantic-version }}
+    steps:
+    - id: version-bump-semantic-run
+      uses: internal-marketplace/bump-semantic-version-action@v1.0.1
+      with:
+        version-type: ${{ inputs.version-type }}
+        semantic-version: ${{ inputs.version-old }}
+
+  version-bump-date:
+    if: inputs.version-type == 'DATE'
+    name: Bump-by-Date
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    outputs:
+      tag: ${{ steps.version-bump-date-run.outputs.tag }}
+    steps:
+    - id: version-bump-date-run # Find latest tag in the form YYYY.WW.{{counter}} and calculates a new one with counter incremented
+      run: |
+        set -euo pipefail
+        AUTH_HEADER="Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}"
+        BASE_URL="https://code.rbi.tech/api/v3"
+        LATEST=$(curl -kLs -H "$AUTH_HEADER" "$BASE_URL/repos/$GITHUB_REPOSITORY/tags?per_page=100" | jq -r '[.[].name | select(test("^\\d{4}.\\d{2}.\\d+$"))] | first')
+        LATEST_WEEK=$(echo $LATEST | cut -d '.' -f 2)
+        CURRENT_WEEK=$(date +%V)
+
+        LATEST_RELEASE=$(echo -n "${LATEST:-0}" | cut -d'.' -f 3)
+
+        if [ $LATEST_WEEK = $CURRENT_WEEK ]; then
+            echo -n $(date +%Y.)$CURRENT_WEEK.$(($LATEST_RELEASE+1)) | tee /tmp/tag
+        else
+            echo -n $(date +%Y.%V.)1 | tee /tmp/tag
+        fi
+        echo "tag=$(cat /tmp/tag)" >> $GITHUB_OUTPUT
+
+  version-bump-commit:
+    if: inputs.version-type == 'COMMIT'
+    name: Bump-by-Commit
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    outputs:
+      tag: ${{ steps.version-bump-commit-run.outputs.tag }}
+    steps:
+    - id: version-bump-commit-run
+      run: |
+        echo "tag=$(echo $GITHUB_SHA)" >> $GITHUB_OUTPUT
+
+  version-bump:
+    if: |
+      always()
+    name: Bump-Central
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    outputs:
+      tag: ${{ steps.version-bump-run.outputs.tag }}
+    needs: [version-bump-date, version-bump-semantic, version-bump-commit]
+    steps:
+    - name: version-bump-run
+      run: |
+        err() { echo -e "\e[1;31m${@}\e[0m" >&2; exit 1; }
+        VERSION_TYPE=${{ inputs.version-type }}
+        if [[ $VERSION_TYPE == 'DATE' ]]; then
+          TAG=${{ needs.version-bump-date.outputs.tag }}
+        elif [[ $VERSION_TYPE == 'MAJOR' ]] || [[ $VERSION_TYPE == 'MINOR' ]] || [[ $VERSION_TYPE == 'PATCH' ]]; then
+          TAG=${{ needs.version-bump-semantic.outputs.tag }}
+        elif [[ $VERSION_TYPE == 'STRING' ]]; then
+          TAG=${{ inputs.version-old }}
+          [ -z $TAG ] && err "ERROR: Version is STRING, should be supplied by the user but no version supplied." || true
+        elif [[ $VERSION_TYPE == 'COMMIT' ]]; then
+          TAG=${{ needs.version-bump-commit.outputs.tag }}
+        fi
+        [ -z $TAG ] && err "ERROR: New version is empty and should't be." || true
+        echo $TAG && echo "tag=$TAG" >> $GITHUB_OUTPUT

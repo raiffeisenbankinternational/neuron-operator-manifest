@@ -1,0 +1,29 @@
+###
+### Pulsar settings
+###
+# Selects the pulsar cluster to target.
+clusterName: dev01
+
+# possibility to overwrite resources
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "50m"
+  limits:
+    memory: "512Mi"
+    cpu: "100m"
+
+# 30 sec it seams that there was an issue with many 
+# ressources that timeout is reached before healthcheck response
+livenessProbe:
+  initialDelaySeconds: 30
+
+# When needed to specify admin token secret name
+# uncomment and change below.
+# clusterAdminSecretName: rbi-neuron-t-admin
+
+# Operator will infer the following values from
+# clusterName. If they need to be overwritten,
+# uncomment below.
+# pulsarServiceName: dev01-neuron-pulsar-proxy
+# pulsarServiceNamespace: dev01-neuron-pulsar

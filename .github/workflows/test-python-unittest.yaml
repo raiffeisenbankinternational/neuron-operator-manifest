@@ -1,0 +1,35 @@
+name: "Python Build"
+
+on:
+  workflow_call:
+    inputs:
+      path:
+        type: string
+        default: "./"
+        required: false
+
+
+jobs:
+  python:
+    name: python
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Test
+      run: |
+        cd ${{ inputs.path }}
+        python3 -m unittest discover . 2>&1 | tee /tmp/report.md
+
+    - name: Store static files
+      uses: actions/upload-artifact@v3
+      with:
+        name: report.md
+        path: /tmp/report.md
+        retention-days: 5

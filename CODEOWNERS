@@ -1,0 +1,7 @@
+# These owners will be the default owners for everything in
+# the repo. Unless a later match takes precedence,
+* @raiffeisen/neuron-trusted-commiters 
+
+# directory at the root of the repository and any of its
+# subdirectories.
+# /docs/* @raiffeisen/neuron-trusted-commiters 

@@ -1,0 +1,61 @@
+name: reusable wf | build-push container image
+
+on:
+  workflow_call:
+    inputs:
+      imageName:
+        required: true
+        type: string
+      imageVersion:
+        required: true
+        default: 2023.01.01
+        type: string
+      targetArchitectures:
+        required: false
+        default: ""
+        type: string
+      buildContext:
+        required: false
+        default: "."
+        type: string
+      containerFiles:
+        required: false
+        default: "./Dockerfile"
+        type: string
+      buildArgs:
+        required: false
+        type: string
+      pushImageToArtifactory:
+        required: true
+        default: true
+        type: boolean
+      imageRegistry:
+        required: true
+        default: artifacts.rbi.tech
+        type: string
+      imageNamespace:
+        required: true
+        default: cortex-docker-host
+        type: string
+    secrets:
+      CONTAINER_REGISTRY_USER:
+        required: true
+      CONTAINER_REGISTRY_TOKEN:
+        required: true
+
+jobs:
+  build:
+    uses: raiffeisen/innersource-github-templates/.github/workflows/build-docker-buildah.yaml@main
+    with:
+      imageName: ${{ inputs.imageName }}
+      imageVersion: ${{ inputs.imageVersion }}
+      targetArchitectures: ${{ inputs.targetArchitectures }}
+      buildContext: ${{ inputs.buildContext }}
+      containerFiles: ${{ inputs.containerFiles }}
+      buildArgs: ${{ inputs.buildArgs }}
+      pushImageToArtifactory: ${{ inputs.pushImageToArtifactory }}
+      imageRegistry: ${{ inputs.imageRegistry }}
+      imageNamespace: ${{ inputs.imageNamespace }}
+    secrets:
+      CONTAINER_REGISTRY_USER: ${{ secrets.CONTAINER_REGISTRY_USER }}
+      CONTAINER_REGISTRY_TOKEN: ${{ secrets.CONTAINER_REGISTRY_TOKEN }}

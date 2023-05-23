@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: neuron-operator
+spec:
+  policyTypes:
+    - Egress
+  podSelector:
+    matchLabels:
+      app: neuron-operator
+  egress:
+    - to: # Allow egress to pods in namespace
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+      ports:
+        - port: 8080 # admin api of broker and proxy
+          protocol: TCP
+        - port: 443  # admin api of broker and proxy
+          protocol: TCP
+    - to: # Allow egress to kube-apiserver on port 6443
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: openshift-kube-apiserver
+        podSelector:
+          matchLabels:
+            apiserver: 'true'
+      ports:
+      - port: 6443
+        protocol: TCP

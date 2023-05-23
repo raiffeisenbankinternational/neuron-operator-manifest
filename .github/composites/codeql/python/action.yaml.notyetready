@@ -1,0 +1,93 @@
+name: codeql-python
+
+inputs:
+  CONTAINER_REGISTRY_USER:
+    required: true
+    type: string
+  CONTAINER_REGISTRY_TOKEN:
+    required: true
+    type: string
+  COSIGN_KEY:
+    required: true
+    type: string
+  COSIGN_PUBLIC_KEY:
+    required: true
+    type: string
+  GH_TOKEN:
+    description: 'An explicit token to query other repos. This is necessary since if we user GITHUB_TOKEN, that would only have access to the current repo.'
+    required: true
+    type: string
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Setup Python
+      uses: internal-marketplace/setup-python@v4
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: python
+        queries: +security-and-quality
+
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v2
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+
+    - name: Set artifact path output for next steps
+      shell: bash
+      run: |
+        echo "sarif_path=$(realpath $GITHUB_WORKSPACE/../results/python.sarif)" >> $GITHUB_ENV
+
+    - name: Upload artifacts to job summary
+      uses: actions/upload-artifact@v3
+      with:
+        name: python.sarif
+        path: ${{ env.sarif_path }}
+        retention-days: 5
+
+    - name: Cleanup
+      shell: bash
+      run: |
+        rm -rf /home/runner/actions-runner/_work/_temp/codeql_databases || true
+
+    - name: Gzip output to upload and sign
+      if: always()
+      shell: bash
+      run: |
+        tar -zcvf /tmp/codeql-python.tar.gz ${{ env.sarif_path }}
+
+    - name: Checkout innersource repo for sign action
+      if: always()
+      uses: actions/checkout@v3
+      with:
+        repository: raiffeisen/innersource-github-templates
+        token: ${{ inputs.GH_TOKEN }}
+        path: raiffeisen/innersource-github-templates
+
+    - name: Determine next version
+      id: version
+      uses: ./raiffeisen/innersource-github-templates/.github/composites/version
+      with:
+        version-type: ${{ inputs.version-type }}
+        GH_TOKEN: ${{ inputs.GH_TOKEN }}
+
+    - name: Upload artifacts and signatures to Artifactory
+      if: always()
+      uses: ./raiffeisen/innersource-github-templates/.github/composites/sign
+      with:
+        artifact: /tmp/codeql-python.tar.gz
+        imageRegistry: artifacts.rbi.tech
+        namespace: cortex-docker-host
+        path: $GITHUB_REPOSITORY
+        push: true
+        version: ${{ steps.version.outputs.tag }}
+        CONTAINER_REGISTRY_USER: ${{ inputs.CONTAINER_REGISTRY_USER }}
+        CONTAINER_REGISTRY_TOKEN: ${{ inputs.CONTAINER_REGISTRY_TOKEN }}
+        COSIGN_KEY: ${{ inputs.COSIGN_KEY }}
+        COSIGN_PUBLIC_KEY: ${{ inputs.COSIGN_PUBLIC_KEY }}

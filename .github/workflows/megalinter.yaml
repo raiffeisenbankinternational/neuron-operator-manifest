@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  workflow_call:
+
+jobs:
+  megalinter:
+    name: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Lint Code Base
+      run: |
+        docker run --rm -v $(pwd):/tmp/lint:rw oxsecurity/megalinter:v6
+
+    - name: Upload build output
+      id: upload
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: linter-output
+        path: megalinter-reports/
+        retention-days: 5

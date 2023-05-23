@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  workflow_call:
+
+jobs:
+  superlinter:
+    name: lint
+    runs-on: mihai-awesome
+    strategy:
+      fail-fast: false
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Lint Code Base
+      uses: internal-marketplace/super-linter/slim@v4
+      env:
+        VALIDATE_ALL_CODEBASE: false
+        DEFAULT_BRANCH: main
